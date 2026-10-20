@@ -1,26 +1,30 @@
 # Smart Electricity Management System
 
-The dashboard uses an Express/EJS web interface and a C++ OOP application as its backend. Express does not implement customer or billing rules itself: it calls the C++ executable, which uses the `Customer`, `Meter`, `Bill`/`ElectricityBill`, and `ElectricityApplication` classes and persists records to the existing `customers.dat` and `bills.dat` files.
+The web dashboard stores customer and bill records in MongoDB Atlas. Its Express API calls the C++ OOP domain service for customer validation, meter readings, bill calculations, and payment-state changes before persisting those results to Atlas.
 
-## Run the web dashboard
+## Configure MongoDB Atlas
 
-1. Install Node.js 20 or newer and MinGW g++ with C++17 support.
-2. Install the Node dependencies and start the app:
+1. Create an Atlas database user and allow your development machine's IP in the Atlas Network Access settings.
+2. Copy `.env.example` to `.env`.
+3. Put your Atlas connection string in `.env` as `MONGODB_URI`. Replace its database name with `sems` and URL-encode any special characters in the database password. Never commit or share `.env`.
+4. Install dependencies and run the app:
 
    ```powershell
    npm install
    npm start
    ```
 
-   `npm start` compiles `main.cpp` into `sems_cpp.exe` before launching Express.
-3. Open `http://127.0.0.1:3000`.
+   `npm start` compiles `main.cpp` into `sems_cpp.exe` before starting the web server.
+5. Open `http://127.0.0.1:3000`. `/api/health` reports whether the database connection is available.
 
-The web app loads the same local `.dat` files as the C++ terminal program, so changes made through either interface are visible to the other. Keep both programs running from the project directory to share these files. To store the C++ data files in another existing directory, set `SEMS_DATA_DIR` in `.env`. Generated executables, local data files, `.env`, and `node_modules` are ignored by Git.
+MongoDB driver connection-pool settings are left at their defaults; the app currently has no measured concurrency or workload to justify custom values. If the application is deployed, monitor Atlas **Metrics → Connections** and adjust only if observed traffic or pool wait times warrant it.
 
-## C++ terminal app
+The web dashboard starts with empty Atlas collections. Existing `customers.dat` and `bills.dat` files are not uploaded automatically. The original menu-driven C++ terminal program continues using those local files and is separate from the Atlas-backed web dashboard.
 
-Run `main.exe` (or compile `main.cpp` with g++) to use the original menu-driven C++ program. It continues to use the same customer and bill files.
+## Architecture
 
-## MongoDB
+- `main.cpp`: C++ OOP domain service, including `Customer`, `Meter`, abstract `Bill`, and polymorphic `ElectricityBill`.
+- `server.js`: Express API, Atlas connection, MongoDB persistence, and calls into the compiled C++ service.
+- `views/index.ejs`: EJS page wrapper for the existing dashboard.
 
-MongoDB is not part of this architecture: persistence is handled by the existing C++ file-backed application. A MongoDB URI in `.env` will not be read or used. The web server binds to localhost by default and has no authentication; do not expose it to the internet.
+The server binds to `127.0.0.1` by default and has no authentication. Keep it private; do not expose it to the public internet.

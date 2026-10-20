@@ -1137,8 +1137,8 @@
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="btn-sync-backend" class="btn btn-primary btn-sm" onclick="syncBackendData()" title="Reload customers and bills from the C++ OOP backend">🔄 Refresh C++</button>
-      <span id="backend-status-badge" class="badge-online">● C++ OOP Backend</span>
+      <button id="btn-sync-backend" class="btn btn-primary btn-sm" onclick="syncBackendData()" title="Reload customers and bills from MongoDB Atlas">🔄 Refresh Cloud Data</button>
+      <span id="backend-status-badge" class="badge-online">● MongoDB Atlas</span>
     </div>
   </div>
 
@@ -1453,20 +1453,20 @@ async function loadData(showMessage) {
     renderCustomersTable();
     populateCustomerDropdown();
     var badge = document.getElementById('backend-status-badge');
-    if (badge) badge.textContent = '● C++ OOP Backend';
-    if (showMessage) toast('Data refreshed from C++.');
+    if (badge) badge.textContent = '● MongoDB Atlas';
+    if (showMessage) toast('Data refreshed from MongoDB Atlas.');
   } catch (error) {
-    toast('Unable to load C++ application data: ' + error.message, 'error');
+    toast('Unable to load cloud data: ' + error.message, 'error');
   }
 }
 
-/* ═══════════ C++ BACKEND SYNCHRONIZATION ═══════════ */
+/* ═══════════ MONGODB ATLAS DATA ═══════════ */
 function syncBackendData() {
   loadData(true);
 }
 
 async function resetData() {
-  if (!confirm('Delete all customers and bills from the C++ local data files? This cannot be undone.')) return;
+  if (!confirm('Delete all customers and bills from MongoDB Atlas? This cannot be undone.')) return;
   try {
     await apiRequest('/api/data', { method: 'DELETE' });
     customers = [];
@@ -1474,9 +1474,9 @@ async function resetData() {
     refreshDashboard();
     renderCustomersTable();
     populateCustomerDropdown();
-    toast('All customer and bill data was deleted.');
+    toast('All cloud customer and bill data was deleted.');
   } catch (error) {
-    toast('Unable to reset application data: ' + error.message, 'error');
+    toast('Unable to reset cloud data: ' + error.message, 'error');
   }
 }
 
