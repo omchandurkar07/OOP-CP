@@ -16,3 +16,7 @@
 *.db
 *.sqlite
 *.sqlite3
+
+# Node.js dependencies and local output
+/node_modules/
+npm-debug.log*

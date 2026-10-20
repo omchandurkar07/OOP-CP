@@ -9,6 +9,8 @@
 #include <fstream>
 #include <sstream>
 #include <cctype>
+#include <stdexcept>
+#include <cstdlib>
 
 using namespace std;
 
@@ -818,7 +820,7 @@ void showBillHistory(
 // PAYMENT
 // ============================================================
 
-void saveBills(const vector<unique_ptr<ElectricityBill>>& bills);
+bool saveBills(const vector<unique_ptr<ElectricityBill>>& bills);
 void syncFrontendDatabase(
     const vector<unique_ptr<Customer>>& customers,
     const vector<unique_ptr<ElectricityBill>>& bills
@@ -921,6 +923,11 @@ string escapeJSON(const string& s) {
         else if (c == '\n') o << "\\n";
         else if (c == '\r') o << "\\r";
         else if (c == '\t') o << "\\t";
+        else if (static_cast<unsigned char>(c) < 0x20) {
+            const char* hex = "0123456789abcdef";
+            unsigned char value = static_cast<unsigned char>(c);
+            o << "\\u00" << hex[value >> 4] << hex[value & 0x0f];
+        }
         else o << c;
     }
     return o.str();
@@ -973,14 +980,11 @@ void syncFrontendDatabase(
 
 // ---------- Save / Load Customers ----------
 
-void saveCustomers(
+bool saveCustomers(
     const vector<unique_ptr<Customer>>& customers
 ) {
     ofstream file(CUSTOMERS_FILE);
-    if (!file.is_open()) {
-        cout << "  [Warning] Unable to open '" << CUSTOMERS_FILE << "' for writing.\n";
-        return;
-    }
+    if (!file.is_open()) return false;
     for (const auto& c : customers) {
         file << c->getId()          << "|"
              << c->getName()        << "|"
@@ -988,6 +992,8 @@ void saveCustomers(
              << c->getMeterNumber() << "|"
              << c->getType()        << "\n";
     }
+    file.close();
+    return file.good();
 }
 
 void loadCustomers(
@@ -1028,19 +1034,16 @@ void loadCustomers(
     }
 
     if (!customers.empty())
-        cout << "[Loaded " << customers.size() << " customer(s) from " << CUSTOMERS_FILE << "]\n";
+        cerr << "[Loaded " << customers.size() << " customer(s) from " << CUSTOMERS_FILE << "]\n";
 }
 
 // ---------- Save / Load Bills ----------
 
-void saveBills(
+bool saveBills(
     const vector<unique_ptr<ElectricityBill>>& bills
 ) {
     ofstream file(BILLS_FILE);
-    if (!file.is_open()) {
-        cout << "  [Warning] Unable to open '" << BILLS_FILE << "' for writing.\n";
-        return;
-    }
+    if (!file.is_open()) return false;
     for (const auto& b : bills) {
         file << fixed << setprecision(6)
              << b->getCustomerId()      << "|"
@@ -1052,6 +1055,8 @@ void saveBills(
              << b->getCurrentReading()  << "|"
              << b->getPaymentStatus()   << "\n";
     }
+    file.close();
+    return file.good();
 }
 
 void loadBills(
@@ -1098,14 +1103,267 @@ void loadBills(
     }
 
     if (!bills.empty())
-        cout << "[Loaded " << bills.size() << " bill(s) from " << BILLS_FILE << "]\n";
+        cerr << "[Loaded " << bills.size() << " bill(s) from " << BILLS_FILE << "]\n";
+}
+
+class ApiError : public runtime_error {
+private:
+    int statusCode;
+
+public:
+    ApiError(int status, const string& message)
+        : runtime_error(message), statusCode(status) {}
+
+    int getStatusCode() const { return statusCode; }
+};
+
+class ElectricityApplication {
+private:
+    vector<unique_ptr<Customer>> customers;
+    vector<unique_ptr<ElectricityBill>> bills;
+
+    static bool hasUnsafeField(const string& value) {
+        return value.find('|') != string::npos ||
+               value.find('\n') != string::npos ||
+               value.find('\r') != string::npos;
+    }
+
+    static int parseId(const string& value) {
+        size_t consumed = 0;
+        int id;
+        try {
+            id = stoi(value, &consumed);
+        } catch (const exception&) {
+            throw ApiError(400, "Customer ID must be a positive integer.");
+        }
+        if (consumed != value.size() || id <= 0)
+            throw ApiError(400, "Customer ID must be a positive integer.");
+        return id;
+    }
+
+    static double parseReading(const string& value) {
+        size_t consumed = 0;
+        double reading;
+        try {
+            reading = stod(value, &consumed);
+        } catch (const exception&) {
+            throw ApiError(400, "Meter readings must be valid non-negative numbers.");
+        }
+        if (consumed != value.size() || !isfinite(reading) || reading < 0)
+            throw ApiError(400, "Meter readings must be valid non-negative numbers.");
+        return reading;
+    }
+
+    Customer* findCustomer(int id) {
+        return searchCustomer(customers, id);
+    }
+
+    ElectricityBill* findBill(const string& meter, const string& month) {
+        for (const auto& bill : bills) {
+            if (InputValidator::toLower(bill->getMeterNumber()) == InputValidator::toLower(meter) &&
+                InputValidator::toLower(bill->getMonthYear()) == InputValidator::toLower(month))
+                return bill.get();
+        }
+        return nullptr;
+    }
+
+    static string customerJSON(const Customer& customer) {
+        ostringstream json;
+        json << "{\"id\":" << customer.getId()
+             << ",\"name\":\"" << escapeJSON(customer.getName())
+             << "\",\"address\":\"" << escapeJSON(customer.getAddress())
+             << "\",\"meterNumber\":\"" << escapeJSON(customer.getMeterNumber())
+             << "\",\"type\":\"" << escapeJSON(customer.getType()) << "\"}";
+        return json.str();
+    }
+
+    static string billJSON(const ElectricityBill& bill) {
+        ostringstream json;
+        json << fixed << setprecision(2)
+             << "{\"customerId\":" << bill.getCustomerId()
+             << ",\"customerName\":\"" << escapeJSON(bill.getCustomerName())
+             << "\",\"meterNumber\":\"" << escapeJSON(bill.getMeterNumber())
+             << "\",\"customerType\":\"" << escapeJSON(bill.getCustomerType())
+             << "\",\"monthYear\":\"" << escapeJSON(bill.getMonthYear())
+             << "\",\"previousReading\":" << bill.getPreviousReading()
+             << ",\"currentReading\":" << bill.getCurrentReading()
+             << ",\"units\":" << bill.getUnits()
+             << ",\"billAmount\":" << bill.getBillAmount()
+             << ",\"paymentStatus\":\"" << escapeJSON(bill.getPaymentStatus()) << "\"}";
+        return json.str();
+    }
+
+public:
+    ElectricityApplication() {
+        loadCustomers(customers);
+        loadBills(bills);
+    }
+
+    string getDataJSON() const {
+        ostringstream json;
+        json << "{\"customers\":[";
+        for (size_t i = 0; i < customers.size(); ++i) {
+            if (i) json << ',';
+            json << customerJSON(*customers[i]);
+        }
+        json << "],\"bills\":[";
+        for (size_t i = 0; i < bills.size(); ++i) {
+            if (i) json << ',';
+            json << billJSON(*bills[i]);
+        }
+        json << "]}";
+        return json.str();
+    }
+
+    string addCustomer(const vector<string>& args) {
+        int id = parseId(args[0]);
+        string name = InputValidator::trim(args[1]);
+        string address = InputValidator::trim(args[2]);
+        string meter = InputValidator::trim(args[3]);
+        string type = InputValidator::trim(args[4]);
+        if (name.size() < 2 || address.size() < 3 || meter.size() < 2 ||
+            hasUnsafeField(name) || hasUnsafeField(address) || hasUnsafeField(meter) ||
+            meter.find(' ') != string::npos || hasUnsafeField(type))
+            throw ApiError(400, "Customer fields are invalid.");
+        if (type != "Residential" && type != "Commercial")
+            throw ApiError(400, "Customer type must be Residential or Commercial.");
+        for (const auto& customer : customers) {
+            if (customer->getId() == id)
+                throw ApiError(409, "That customer ID already exists.");
+            if (InputValidator::toLower(customer->getMeterNumber()) == InputValidator::toLower(meter))
+                throw ApiError(409, "That meter number is already registered.");
+        }
+
+        Customer customer(id, name, address, meter, type);
+        customers.push_back(make_unique<Customer>(customer));
+        if (!saveCustomers(customers)) {
+            customers.pop_back();
+            throw ApiError(500, "Could not save customer data.");
+        }
+        return customerJSON(*customers.back());
+    }
+
+    string deleteCustomer(const vector<string>& args) {
+        int id = parseId(args[0]);
+        vector<unique_ptr<Customer>>::iterator customer = find_if(
+            customers.begin(), customers.end(),
+            [id](const unique_ptr<Customer>& item) { return item->getId() == id; }
+        );
+        if (customer == customers.end()) throw ApiError(404, "Customer not found.");
+
+        customers.erase(customer);
+        bills.erase(remove_if(bills.begin(), bills.end(),
+            [id](const unique_ptr<ElectricityBill>& bill) {
+                return bill->getCustomerId() == id;
+            }), bills.end());
+        if (!saveCustomers(customers) || !saveBills(bills))
+            throw ApiError(500, "Could not save the customer deletion.");
+        return "{}";
+    }
+
+    string generateBill(const vector<string>& args) {
+        int id = parseId(args[0]);
+        double previous = parseReading(args[1]);
+        double current = parseReading(args[2]);
+        string month = InputValidator::trim(args[3]);
+        if (current < previous)
+            throw ApiError(400, "Current reading cannot be less than previous reading.");
+        if (month.size() < 2 || hasUnsafeField(month))
+            throw ApiError(400, "Enter a valid billing month.");
+
+        Customer* customer = findCustomer(id);
+        if (!customer) throw ApiError(404, "Customer not found.");
+        if (findBill(customer->getMeterNumber(), month))
+            throw ApiError(409, "A bill for that meter and month already exists.");
+
+        ElectricityBill bill(id, customer->getName(), customer->getMeterNumber(),
+            customer->getType(), month, previous, current);
+        bills.push_back(make_unique<ElectricityBill>(bill));
+        if (!saveBills(bills)) {
+            bills.pop_back();
+            throw ApiError(500, "Could not save bill data.");
+        }
+        return billJSON(*bills.back());
+    }
+
+    string makePayment(const vector<string>& args) {
+        string meter = InputValidator::trim(args[0]);
+        string month = InputValidator::trim(args[1]);
+        if (meter.empty() || month.empty() || hasUnsafeField(meter) || hasUnsafeField(month))
+            throw ApiError(400, "Meter number and billing month are required.");
+        ElectricityBill* bill = findBill(meter, month);
+        if (!bill) throw ApiError(404, "Bill not found.");
+        bill->makePayment();
+        if (!saveBills(bills))
+            throw ApiError(500, "Could not save payment status.");
+        return billJSON(*bill);
+    }
+
+    string resetData() {
+        vector<unique_ptr<Customer>> previousCustomers;
+        vector<unique_ptr<ElectricityBill>> previousBills;
+        customers.swap(previousCustomers);
+        bills.swap(previousBills);
+        if (!saveCustomers(customers) || !saveBills(bills)) {
+            customers.swap(previousCustomers);
+            bills.swap(previousBills);
+            throw ApiError(500, "Could not reset local application data.");
+        }
+        return "{}";
+    }
+};
+
+int runApiCommand(int argc, char* argv[]) {
+    if (argc < 3 || string(argv[1]) != "--api") {
+        cerr << "Usage: sems_cpp.exe --api <data|add-customer|delete-customer|generate-bill|pay|reset> [arguments]\n";
+        return 2;
+    }
+
+    try {
+        ElectricityApplication application;
+        vector<string> args;
+        for (int i = 3; i < argc; ++i) args.push_back(argv[i]);
+        string result;
+        string command = argv[2];
+
+        if (command == "data" && args.empty()) {
+            result = application.getDataJSON();
+        } else if (command == "add-customer" && args.size() == 5) {
+            result = application.addCustomer(args);
+        } else if (command == "delete-customer" && args.size() == 1) {
+            result = application.deleteCustomer(args);
+        } else if (command == "generate-bill" && args.size() == 4) {
+            result = application.generateBill(args);
+        } else if (command == "pay" && args.size() == 2) {
+            result = application.makePayment(args);
+        } else if (command == "reset" && args.empty()) {
+            result = application.resetData();
+        } else {
+            throw ApiError(400, "Invalid C++ API command or arguments.");
+        }
+
+        cout << result;
+        return 0;
+    } catch (const ApiError& error) {
+        cerr << error.what();
+        if (error.getStatusCode() == 404) return 3;
+        if (error.getStatusCode() == 409) return 4;
+        if (error.getStatusCode() >= 500) return 5;
+        return 2;
+    } catch (const exception& error) {
+        cerr << error.what();
+        return 5;
+    }
 }
 
 // ============================================================
 // MAIN APPLICATION
 // ============================================================
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc > 1 && string(argv[1]) == "--api")
+        return runApiCommand(argc, argv);
+
     Admin admin;
 
     if (!admin.login()) {

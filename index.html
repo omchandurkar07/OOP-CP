@@ -1137,8 +1137,8 @@
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;">
-      <button id="btn-sync-backend" class="btn btn-primary btn-sm" onclick="syncBackendData(true)" title="Sync latest customers & bills from C++ terminal">🔄 Sync Terminal</button>
-      <span id="backend-status-badge" class="badge-online" style="cursor:pointer;" onclick="syncBackendData(true)" title="Click to sync with C++ backend">● Terminal Synced</span>
+      <button id="btn-sync-backend" class="btn btn-primary btn-sm" onclick="syncBackendData()" title="Reload customers and bills from the C++ OOP backend">🔄 Refresh C++</button>
+      <span id="backend-status-badge" class="badge-online">● C++ OOP Backend</span>
     </div>
   </div>
 
@@ -1188,8 +1188,8 @@
 
     <!-- All Customers -->
     <div class="dash-section-header">
-      <div class="section-title section-title--flush" id="dash-cust-section-title">👥 All Customers (100)</div>
-      <button class="btn btn-reset" onclick="resetData()" title="Wipe data and reload fresh sample data">🔄 Reset Sample Data</button>
+      <div class="section-title section-title--flush" id="dash-cust-section-title">👥 All Customers (0)</div>
+      <button class="btn btn-reset" onclick="resetData()" title="Delete all customers and bills from the C++ data files">🗑 Reset Data</button>
     </div>
     <div class="table-wrap" id="dash-customers-wrap">
       <div class="dash-cust-header dash-cust-header--padded">
@@ -1248,9 +1248,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
       <div class="section-title" style="margin-bottom:0;">All Customers</div>
       <div style="display:flex;gap:10px;">
-        <button class="btn btn-primary btn-sm" onclick="syncBackendData(true)">🔄 Sync with Terminal</button>
-        <button class="btn btn-sm" style="background:var(--glass);border:1px solid var(--border);" onclick="document.getElementById('file-import-dat').click()">📂 Import customers.dat</button>
-        <input type="file" id="file-import-dat" accept=".dat,.txt" style="display:none;" onchange="importCustomersDatFile(event)" />
+        <button class="btn btn-primary btn-sm" onclick="syncBackendData()">🔄 Refresh from C++</button>
       </div>
     </div>
     <div class="table-wrap" id="customers-table-wrap">
@@ -1431,249 +1429,55 @@
   </div>
 </main>
 
-<script id="sems-backend-script" src="database.js"></script>
 <script>
 /* State */
-let customers = JSON.parse(localStorage.getItem('sems_customers') || '[]');
-let bills      = JSON.parse(localStorage.getItem('sems_bills')     || '[]');
+let customers = [];
+let bills = [];
 
-/* Seed 100 sample customers (runs only when list is empty) */
-(function seedCustomers() {
-  if (customers.length > 0) return;
-  var names = [
-    'Rahul Sharma','Priya Patel','Amit Kumar','Sneha Gupta','Vikram Singh',
-    'Ananya Nair','Ravi Verma','Pooja Mehta','Suresh Reddy','Kavita Joshi',
-    'Arun Tiwari','Deepa Iyer','Manish Agarwal','Sunita Rao','Rajesh Khanna',
-    'Meena Pillai','Sanjay Dubey','Lakshmi Shetty','Ashok Pandey','Rekha Mishra',
-    'Nikhil Bose','Divya Banerjee','Vinod Chandra','Usha Saxena','Manoj Yadav',
-    'Geeta Nambiar','Prakash Jain','Sarita Kulkarni','Deepak Malhotra','Anu Krishnan',
-    'Harish Goel','Neetha Varghese','Rohit Tripathi','Swati Kapoor','Kiran Patil',
-    'Smita Deshpande','Ganesh Bhatt','Preethi Menon','Sunil Chauhan','Latha Subramaniam',
-    'Vivek Rastogi','Anjali Das','Ramesh Bajaj','Manju Srivastava','Ajay Chatterjee',
-    'Nalini Pillai','Santosh Shukla','Vidya Hegde','Pankaj Oberoi','Rupa Bhatia',
-    'Mohan Lal','Shobha Naidu','Girish Tiwari','Nirmala Pawar','Anil Goswami',
-    'Sunanda Rajan','Hemant Dixit','Saraswathi Murthy','Bharat Sharma','Padma Venkatesh',
-    'Naresh Thakur','Meenakshi Arora','Dinesh Wagle','Prabhavati Shetty','Sudhir Pillai',
-    'Lalita Nair','Rajendra Gupta','Hema Mishra','Ashwin Menon','Shanta Reddy',
-    'Yogesh Joshi','Kamala Singh','Balaji Rao','Sadhana Kulkarni','Chandan Bose',
-    'Vimala Iyer','Satish Agarwal','Geetha Nair','Puneet Sharma','Saroja Patel',
-    'Mahesh Chauhan','Sumathi Krishnamurthy','Alok Verma','Saranya Suresh','Jitendra Kumar',
-    'Usha Pillai','Arvind Sinha','Shakuntala Devi','Rajeev Nair','Malathi Rao',
-    'Devendra Patel','Ambika Sharma','Narendar Singh','Shakila Banu','Suhas Kulkarni',
-    'Sushila Mehta','Girija Menon','Ramakrishna Reddy','Kalpana Joshi','Venkatesh Raju'
-  ];
-  var cities = [
-    'Mumbai','Delhi','Bangalore','Chennai','Hyderabad',
-    'Pune','Kolkata','Ahmedabad','Jaipur','Lucknow'
-  ];
-  var streets = [
-    'MG Road','Gandhi Nagar','Nehru Street','Rajaji Road','Shivaji Marg',
-    'Anna Salai','Bose Avenue','Tilak Nagar','Patel Colony','Ambedkar Road'
-  ];
-  for (var i = 0; i < 100; i++) {
-    var isRes  = i % 3 !== 0; // ~67% Residential, ~33% Commercial
-    customers.push({
-      id:          101 + i,
-      name:        names[i],
-      address:     (Math.floor(Math.random() * 200) + 1) + ' ' + streets[i % streets.length] + ', ' + cities[i % cities.length],
-      meterNumber: 'MTR-' + String(101 + i).padStart(3, '0'),
-      type:        isRes ? 'Residential' : 'Commercial'
-    });
-  }
-  localStorage.setItem('sems_customers', JSON.stringify(customers));
-})();
-
-/* Seed 6 months of bills for all 100 customers (runs only when bills list is empty) */
-(function seedBills() {
-  if (bills.length > 0) return;
-
-  var months = [
-    'May 2026','June 2026','July 2026',
-    'August 2026','September 2026','October 2026'
-  ];
-
-  /* Deterministic pseudo-random (no Math.random so chart is stable on reload) */
-  function prng(n) { return ((n * 1664525 + 1013904223) & 0xffffffff) >>> 0; }
-
-  customers.forEach(function(c, idx) {
-    var reading = 1000 + idx * 11; /* unique start reading per customer */
-
-    months.forEach(function(month, mIdx) {
-      var s1 = prng(idx * 13 + mIdx * 7);
-      var s2 = prng(s1 + idx);
-
-      /* Residential: 55-380 kWh  |  Commercial: 100-490 kWh */
-      var units = c.type === 'Residential'
-        ? 55  + (s1 % 326)
-        : 100 + (s1 % 391);
-
-      var prev    = reading;
-      var curr    = reading + units;
-      reading     = curr;
-
-      /* Use the same billing formula as the C++ / JS calcBill() */
-      var amount  = calcBill(c.type, units);
-
-      /* Older months 75 % paid, recent months 45 % paid */
-      var paidChance = mIdx < 4 ? 75 : 45;
-      var paid       = (s2 % 100) < paidChance;
-
-      bills.push({
-        customerId:      c.id,
-        customerName:    c.name,
-        meterNumber:     c.meterNumber,
-        customerType:    c.type,
-        monthYear:       month,
-        previousReading: prev,
-        currentReading:  curr,
-        units:           units,
-        billAmount:      amount,
-        paymentStatus:   paid ? 'PAID' : 'UNPAID'
-      });
-    });
-  });
-
-  localStorage.setItem('sems_bills', JSON.stringify(bills));
-})();
-
-function save() {
-  localStorage.setItem('sems_customers', JSON.stringify(customers));
-  localStorage.setItem('sems_bills',     JSON.stringify(bills));
+async function apiRequest(url, options) {
+  var requestOptions = Object.assign({ headers: {} }, options || {});
+  if (requestOptions.body) requestOptions.headers['Content-Type'] = 'application/json';
+  var response = await fetch(url, requestOptions);
+  if (response.status === 204) return null;
+  var result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'The request failed.');
+  return result;
 }
 
-/* ═══════════ LIVE BACKEND SYNCHRONIZATION ═══════════ */
-let _lastBackendSyncTime = '';
-
-function applyBackendData(data, userInitiated) {
-  if (!data || !Array.isArray(data.customers)) return;
-  if (!userInitiated && data.syncedAt && data.syncedAt === _lastBackendSyncTime) {
-    return; // No new updates from C++ terminal
-  }
-  _lastBackendSyncTime = data.syncedAt || '';
-
-  var termCustomers = data.customers;
-  var termBills     = Array.isArray(data.bills) ? data.bills : [];
-  var newCount = 0;
-
-  // Integrate customers from terminal: if ID exists, update; else prepend to top
-  termCustomers.forEach(function(tc) {
-    var idx = customers.findIndex(function(c) { return c.id === tc.id; });
-    if (idx !== -1) {
-      customers[idx] = tc;
-    } else {
-      customers.unshift(tc);
-      newCount++;
-    }
-  });
-
-  // Integrate bills from terminal
-  termBills.forEach(function(tb) {
-    var bIdx = bills.findIndex(function(b) {
-      return b.meterNumber.toLowerCase() === tb.meterNumber.toLowerCase() &&
-             b.monthYear.toLowerCase() === tb.monthYear.toLowerCase();
-    });
-    if (bIdx !== -1) {
-      bills[bIdx] = tb;
-    } else {
-      bills.unshift(tb);
-    }
-  });
-
-  save();
-  refreshDashboard();
-  renderCustomersTable();
-  populateCustomerDropdown();
-
-  var badge = document.getElementById('backend-status-badge');
-  if (badge) {
-    badge.textContent = '● Terminal Synced (' + termCustomers.length + ' Cust)';
-    badge.style.color = 'var(--cyan)';
-  }
-
-  if (userInitiated) {
-    toast('Synced ' + termCustomers.length + ' customer(s) from Terminal backend!', 'success');
-  } else if (newCount > 0) {
-    toast('⚡ New customer from Terminal added to dashboard!', 'success');
-  }
-}
-
-// Dynamically reloads database.js for live real-time sync
-function syncBackendData(userInitiated) {
-  var old = document.getElementById('sems-backend-script-dyn');
-  if (old) old.remove();
-
-  var s = document.createElement('script');
-  s.id = 'sems-backend-script-dyn';
-  s.src = 'database.js?t=' + Date.now();
-  s.onload = function() {
-    if (window.SEMS_BACKEND_DATA) {
-      applyBackendData(window.SEMS_BACKEND_DATA, userInitiated);
-    } else if (userInitiated) {
-      toast('database.js loaded but contained no customer data.', 'warning');
-    }
-  };
-  s.onerror = function() {
-    if (userInitiated) {
-      toast('database.js not found yet. Run main.exe in terminal first.', 'warning');
-    }
-  };
-  document.head.appendChild(s);
-}
-
-// Manual import handler for customers.dat file
-function importCustomersDatFile(e) {
-  var file = e.target.files && e.target.files[0];
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function(evt) {
-    var content = evt.target.result || '';
-    var lines = content.split(/\r?\n/);
-    var count = 0;
-    lines.forEach(function(line) {
-      line = line.trim();
-      if (!line) return;
-      var parts = line.split('|');
-      if (parts.length >= 5) {
-        var id = parseInt(parts[0], 10);
-        if (!isNaN(id) && id > 0) {
-          var cust = {
-            id: id,
-            name: parts[1],
-            address: parts[2],
-            meterNumber: parts[3],
-            type: parts[4]
-          };
-          var idx = customers.findIndex(function(c) { return c.id === id; });
-          if (idx !== -1) customers[idx] = cust;
-          else { customers.unshift(cust); count++; }
-        }
-      }
-    });
-    save();
+async function loadData(showMessage) {
+  try {
+    var data = await apiRequest('/api/data');
+    customers = data.customers;
+    bills = data.bills;
     refreshDashboard();
     renderCustomersTable();
     populateCustomerDropdown();
-    toast('Imported ' + count + ' customer(s) from ' + file.name + '!', 'success');
-  };
-  reader.readAsText(file);
-  e.target.value = '';
+    var badge = document.getElementById('backend-status-badge');
+    if (badge) badge.textContent = '● C++ OOP Backend';
+    if (showMessage) toast('Data refreshed from C++.');
+  } catch (error) {
+    toast('Unable to load C++ application data: ' + error.message, 'error');
+  }
 }
 
-// Initial sync on page load if database.js was included
-if (window.SEMS_BACKEND_DATA) {
-  applyBackendData(window.SEMS_BACKEND_DATA, false);
+/* ═══════════ C++ BACKEND SYNCHRONIZATION ═══════════ */
+function syncBackendData() {
+  loadData(true);
 }
 
-// Auto-poll database.js every 2 seconds for live changes made in terminal
-setInterval(function() {
-  syncBackendData(false);
-}, 2000);
-
-function resetData() {
-  if (!confirm('Reset all data to 100 sample customers with 6 months of bills?\nThis will clear any data you have added.')) return;
-  localStorage.removeItem('sems_customers');
-  localStorage.removeItem('sems_bills');
-  location.reload();
+async function resetData() {
+  if (!confirm('Delete all customers and bills from the C++ local data files? This cannot be undone.')) return;
+  try {
+    await apiRequest('/api/data', { method: 'DELETE' });
+    customers = [];
+    bills = [];
+    refreshDashboard();
+    renderCustomersTable();
+    populateCustomerDropdown();
+    toast('All customer and bill data was deleted.');
+  } catch (error) {
+    toast('Unable to reset application data: ' + error.message, 'error');
+  }
 }
 
 /* Navigation */
@@ -1726,7 +1530,7 @@ function calcBill(type, units) {
 }
 
 /* Add Customer */
-function addCustomer(e) {
+async function addCustomer(e) {
   e.preventDefault();
   var idRaw = document.getElementById('c-id').value.trim();
   var id    = parseInt(idRaw, 10);
@@ -1768,8 +1572,16 @@ function addCustomer(e) {
     return;
   }
 
-  customers.push({ id:id, name:name, address:addr, meterNumber:meter, type:type });
-  save();
+  try {
+    var customer = await apiRequest('/api/customers', {
+      method: 'POST',
+      body: JSON.stringify({ id:id, name:name, address:addr, meterNumber:meter, type:type })
+    });
+    customers.push(customer);
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   e.target.reset();
   toast('Customer "' + name + '" added successfully!');
   refreshDashboard();
@@ -1790,17 +1602,22 @@ function renderCustomersTable() {
     }).join('') + '</tbody></table>';
 }
 
-function deleteCustomer(id) {
+async function deleteCustomer(id) {
   if (!confirm('Are you sure you want to delete customer #' + id + '?')) return;
+  try {
+    await apiRequest('/api/customers/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   customers = customers.filter(function(c){ return c.id !== id; });
-  save();
   renderCustomersTable();
   toast('Customer deleted.');
   refreshDashboard();
 }
 
 /* Generate Bill */
-function generateBill(e) {
+async function generateBill(e) {
   e.preventDefault();
   var cidRaw = document.getElementById('b-cid').value.trim();
   var cid    = parseInt(cidRaw, 10);
@@ -1844,17 +1661,22 @@ function generateBill(e) {
     return;
   }
 
-  var units  = curr - prev;
-  var amount = calcBill(customer.type, units);
-
-  var bill = {
-    customerId: cid, customerName: customer.name,
-    meterNumber: customer.meterNumber, customerType: customer.type,
-    monthYear: month, previousReading: prev, currentReading: curr,
-    units: units, billAmount: amount, paymentStatus: 'UNPAID'
-  };
-  bills.push(bill);
-  save();
+  var bill;
+  try {
+    bill = await apiRequest('/api/bills', {
+      method: 'POST',
+      body: JSON.stringify({
+        customerId: cid,
+        previousReading: prev,
+        currentReading: curr,
+        monthYear: month
+      })
+    });
+    bills.push(bill);
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   toast('Bill generated successfully!');
   refreshDashboard();
   document.getElementById('bill-result').innerHTML = renderBillCard(bill);
@@ -1921,14 +1743,22 @@ function showBillHistory(e) {
     }).join('') + '</tbody></table>';
 }
 
-function quickPay(meter, month) {
+async function quickPay(meter, month) {
   var bill = bills.find(function(b){
     return b.meterNumber.toLowerCase() === meter.toLowerCase() &&
            b.monthYear.toLowerCase() === month.toLowerCase();
   });
   if (bill) {
+    try {
+      await apiRequest('/api/bills/payment', {
+        method: 'PATCH',
+        body: JSON.stringify({ meterNumber: meter, monthYear: month })
+      });
+    } catch (error) {
+      toast(error.message, 'error');
+      return;
+    }
     bill.paymentStatus = 'PAID';
-    save();
     toast('Payment successful! Bill marked as PAID.');
     refreshDashboard();
     var histMeter = document.getElementById('bh-meter');
@@ -1939,7 +1769,7 @@ function quickPay(meter, month) {
 }
 
 /* Make Payment */
-function makePayment(e) {
+async function makePayment(e) {
   e.preventDefault();
   var meter = document.getElementById('pay-meter').value.trim();
   var month = document.getElementById('pay-month').value.trim();
@@ -1958,8 +1788,16 @@ function makePayment(e) {
   if (!bill) { out.innerHTML = '<div class="alert alert-error" style="margin-top:16px">Bill not found for Meter: ' + meter + ' / Month: ' + month + '</div>'; return; }
   if (bill.paymentStatus === 'PAID') { out.innerHTML = '<div class="alert alert-warning" style="margin-top:16px">Bill is already PAID.</div>'; return; }
 
+  try {
+    await apiRequest('/api/bills/payment', {
+      method: 'PATCH',
+      body: JSON.stringify({ meterNumber: meter, monthYear: month })
+    });
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   bill.paymentStatus = 'PAID';
-  save();
   toast('Payment successful!');
   refreshDashboard();
   out.innerHTML = '<div class="alert alert-success" style="margin-top:16px">Payment accepted. Bill for ' + month + ' (Meter: ' + meter + ') is now PAID.</div>';
@@ -2163,11 +2001,19 @@ function field(lbl, val) {
 function caStatCard(color, icon, lbl, val) {
   return '<div class="ca-stat ' + color + '"><div class="lbl">' + icon + ' ' + lbl + '</div><div class="val">' + val + '</div></div>';
 }
-function caQuickPay(custId, month) {
+async function caQuickPay(custId, month) {
   var bill = bills.find(function(b){ return b.customerId===custId && b.monthYear===month; });
   if (!bill || bill.paymentStatus==='PAID') return;
+  try {
+    await apiRequest('/api/bills/payment', {
+      method: 'PATCH',
+      body: JSON.stringify({ meterNumber: bill.meterNumber, monthYear: month })
+    });
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   bill.paymentStatus = 'PAID';
-  save();
   toast('Payment successful! ' + month + ' bill marked as PAID.');
   refreshDashboard();
   runCustomerAnalytics();
@@ -2728,13 +2574,22 @@ function openPersonalDashboard(customerId, graphMode) {
   document.getElementById('pd-content').innerHTML = profileHTML + statsHTML + graphHTML + tableHTML;
 }
 
-function personalQuickPay(customerId, monthYear) {
+async function personalQuickPay(customerId, monthYear) {
   var bill = bills.find(function(b) { return b.customerId === customerId && b.monthYear === monthYear; });
   if (!bill) return;
+  try {
+    await apiRequest('/api/bills/payment', {
+      method: 'PATCH',
+      body: JSON.stringify({ meterNumber: bill.meterNumber, monthYear: monthYear })
+    });
+  } catch (error) {
+    toast(error.message, 'error');
+    return;
+  }
   bill.paymentStatus = 'PAID';
-  save();
   toast('Payment successful! Bill for ' + monthYear + ' is now marked as PAID.');
   refreshDashboard();
+  loadData(false);
   openPersonalDashboard(customerId);
 }
 

@@ -1,0 +1,22 @@
+{
+  "name": "smart-electricity-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart electricity management system with a C++ OOP core and Express/EJS web interface",
+  "main": "server.js",
+  "scripts": {
+    "build:cpp": "g++ -std=c++17 -O2 main.cpp -o sems_cpp.exe",
+    "prestart": "npm run build:cpp",
+    "predev": "npm run build:cpp",
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0"
+  }
+}
