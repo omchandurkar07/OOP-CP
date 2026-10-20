@@ -2589,7 +2589,6 @@ async function personalQuickPay(customerId, monthYear) {
   bill.paymentStatus = 'PAID';
   toast('Payment successful! Bill for ' + monthYear + ' is now marked as PAID.');
   refreshDashboard();
-  loadData(false);
   openPersonalDashboard(customerId);
 }
 
@@ -2636,6 +2635,7 @@ function closeInvoiceModal() {
 }
 
 refreshDashboard();
+loadData(false);
 
 /* Electric Background Particle Grid */
 (function initElectricGrid() {
