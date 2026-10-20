@@ -1,0 +1,18 @@
+# Secrets and local environment configuration
+.env
+.env.*
+!.env.example
+
+# Generated application data (may contain customer information)
+/customers.dat
+/bills.dat
+/database.js
+
+# Compiled binaries and precompiled headers
+*.exe
+*.gch
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
